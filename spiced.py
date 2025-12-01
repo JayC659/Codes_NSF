@@ -1,7 +1,7 @@
 import os
 
 
-class Conversation:
+class ChatLog:
     def __init__(self, log_file=None):
         self.messages = []
         self.log_file = log_file
@@ -21,26 +21,12 @@ class Conversation:
         """Retrieve the entire conversation."""
         return self.messages
 
-    def get_last_n_messages(self, n):
-        """Retrieve the last n messages from the conversation."""
-        return self.messages[-n:]
-
     def remove_message(self, index):
         """Remove a specific message from the conversation by index."""
         if index < len(self.messages):
             del self.messages[index]
 
-    def get_message(self, index):
-        """Retrieve a specific message from the conversation by index."""
-        return self.messages[index] if index < len(self.messages) else None
 
-    def clear_messages(self):
-        """Clear all messages from the conversation."""
-        self.messages = []
-
-    def __str__(self):
-        """Return the conversation in a string format."""
-        return "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.messages])
 os.environ["OPENAI_API_KEY"] = ""
 import openai
 from abc import ABC, abstractmethod
@@ -48,25 +34,25 @@ from abc import ABC, abstractmethod
 #from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 import torch
 
-class AbstractLLM(ABC):
+class BaseLLM(ABC):
     """Abstract Large Language Model."""
 
     def __init__(self):
         pass
 
     @abstractmethod
-    def generate(self, conversation: Conversation):
+    def generate(self, conversation: ChatLog):
         """Generate a response based on the given conversation."""
         pass
 
-class ChatGPT3p5(AbstractLLM):
+class OpenAIChatLLM(BaseLLM):
     """ChatGPT Large Language Model."""
 
     def __init__(self):
         super().__init__()
         openai.api_key=os.environ['OPENAI_API_KEY']
 
-    def generate(self, conversation: Conversation):
+    def generate(self, conversation: ChatLog):
         messages = [{'role' : msg['role'], 'content' : msg['content']} for msg in conversation.get_messages()]
 
         response = openai.chat.completions.create(
@@ -78,37 +64,16 @@ class ChatGPT3p5(AbstractLLM):
 
 import sys
 
-# Allows us to log the output of the model to a file if logging is enabled
-class LogStdoutToFile:
-    def __init__(self, filename):
-        self._filename = filename
-        self._original_stdout = sys.stdout
 
-    def __enter__(self):
-        if self._filename:
-            sys.stdout = open(self._filename, 'w')
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if self._filename:
-            sys.stdout.close()
-        sys.stdout = self._original_stdout
-
-def generate_verilog(conv, model_type, model_id=""):
-    if model_type == "ChatGPT4":
-        model = ChatGPT4()
-    elif model_type == "Claude":
-        model = Claude()
+def run_llm_generation(conv, model_type, model_id=""):
+    
     elif model_type == "ChatGPT3p5":
-        model = ChatGPT3p5()
-    elif model_type == "PaLM":
-        model = PaLM()
-    elif model_type == "CodeLLama":
-        model = CodeLlama(model_id)
+        model = ChatGPTllm()
+    
 
     return(model.generate(conv))
 
-conv = Conversation(log_file=None)
+conv = ChatLog(log_file=None)
 
 conv.add_message("system", "You are an advanced language model trained to analyze SPICE netlists and identify anomalies that could indicate the presence of hardware Trojans. You will be provided with simulation logs of MOSFET behavior and desired specifications of the output node voltage behavior. You will check if there are normal behavior patterns of MOSFETs in the simulation log and use this knowledge to check if there is a Trojan circuit in the netlist. Using the obtained knowledge, determine the nodes where the Trojan is inserted in the netlist.")
 
@@ -424,16 +389,16 @@ conv.add_message("assistant", paragraph_example_explanation_1)
 
 import os
 
-def spice_netlist(file_path):
+def read_spice_netlist(file_path):
   with open(file_path, 'r') as file:
     return file.read()
-def load_simulation_log(file_path):
+def read_simulation_log(file_path):
     with open(file_path, 'r') as file:
         return file.read()
-def submit_simulation_data(netlist_path, current_log_path, voltage_log_path):
-    netlist = spice_netlist(netlist_path)
-    current_log = load_simulation_log(current_log_path)
-    voltage_log = load_simulation_log(voltage_log_path)
+def run_simulation_case(netlist_path, current_log_path, voltage_log_path):
+    netlist = read_spice_netlist(netlist_path)
+    current_log = read_simulation_log(current_log_path)
+    voltage_log = read_simulation_log(voltage_log_path)
 
 
     new_task= f"""
@@ -464,7 +429,7 @@ def submit_simulation_data(netlist_path, current_log_path, voltage_log_path):
     conv.add_message("user", new_task)
 
 # Generate the response
-    response = generate_verilog(conv, "ChatGPT3p5")
+    response = run_llm_generation(conv, "ChatGPT3p5")
     conv.add_message("assistant", response)
 
 
@@ -477,7 +442,7 @@ cases_dir = '/home/jchaudh3/LLM_Trojan_det/738/'
 all_files = os.listdir(cases_dir)
 
 # Function to determine corresponding files for each case
-def get_case_files(files, case_id):
+def find_case_files(files, case_id):
     netlist_path = None
     current_log_path = None
     voltage_log_path = None
@@ -496,16 +461,14 @@ def get_case_files(files, case_id):
 
 # Iterate over each case and submit the simulation data
 for case_id in range(1, 13):
-    netlist_path, current_log_path, voltage_log_path = get_case_files(all_files, case_id)
+    netlist_path, current_log_path, voltage_log_path = find_case_files(all_files, case_id)
 
     if netlist_path and current_log_path and voltage_log_path:
         print("pass")
-        response = submit_simulation_data(netlist_path, current_log_path, voltage_log_path)
+        response = run_simulation_case(netlist_path, current_log_path, voltage_log_path)
         print(f"Response for case {case_id}:")
         print(response)
         print("\n" + "="*50 + "\n")
     else:
         print("Continue")
     conv.remove_message(10)
-
-
