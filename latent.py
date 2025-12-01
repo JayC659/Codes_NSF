@@ -18,7 +18,7 @@ from llama_index.core.agent import ReActAgent
 from llama_index.llms.openai import OpenAI as LlamaOpenAI
 from llama_index.core.tools import BaseTool, FunctionTool
 # from llama_index.core import PromptTemplate  # if needed
-from Troj_correct import *
+from spiced_plus import *
 
 # Set your OpenAI API key (or ensure the environment variable is set)
 openai.api_key = os.environ.get("OPENAI_API_KEY", "YOUR_API_KEY_HERE")
