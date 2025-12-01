@@ -2,9 +2,9 @@ SPICED/SPICED+/LATENT
 
 This repository bundles three Python scripts analog/mixed-signal (A/MS) Trojan generation and detection workflows:
 
-- 1. **SPICED** (spiced.py): LLM‑assisted *Trojan detection and localization*: reads SPICE netlist, simulation logs, and employs a supervised learning-based Chain-of-Thought (CoT) approach along with few-shot learning for effective Trojan detection.
-- 2. **SPICED+** (spiced_plus.py): An agent‑style detector with iterative analysis for *Trojan mitigation*.
-- 3. **LATENT** (latent.py): LLM agent-guided *generation/insertion* pipeline (e.g., Trojan candidate synthesis).
+- **SPICED** (spiced.py): LLM‑assisted *Trojan detection and localization*: reads SPICE netlist, simulation logs, and employs a supervised learning-based Chain-of-Thought (CoT) approach along with few-shot learning for effective Trojan detection.
+- **SPICED+** (spiced_plus.py): An agent‑style detector with iterative analysis for *Trojan mitigation*.
+- **LATENT** (latent.py): LLM agent-guided *generation/insertion* pipeline (e.g., Trojan candidate synthesis).
 
 
 ## Requirements
