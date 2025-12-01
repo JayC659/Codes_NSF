@@ -25,13 +25,11 @@ openai.api_key = os.environ.get("OPENAI_API_KEY", "YOUR_API_KEY_HERE")
 
 
 def ask_llm_for_component_choice(current_design, detection_feedback, available_nodes, response):
-    """
-    Ask the LLM to choose the best component type and nodes based on the current design and detection feedback.
-    """
+    
     prompt = f"""I have the following SPICE netlist for an analog circuit:
---------------------------------
+
 {current_design}
---------------------------------
+
 
 **Guidance for Component Selection**
 
@@ -123,11 +121,7 @@ def save_netlist(netlist, filename):
         file.write(netlist)
 
 def extract_nodes(netlist):
-    """
-    Extract node names from the SPICE netlist.
-    This is a simplified parser that assumes node names are alphanumeric tokens (starting with a letter)
-    found in positions after the component name.
-    """
+   
     if hasattr(netlist, "response"):  # Check if candidate_design is an object with a response attribute
         netlist = netlist.response
     nodes = set()
@@ -144,21 +138,12 @@ def extract_nodes(netlist):
                     nodes.add(token)
     return list(nodes)
 
-#def select_component_and_nodes(nodes):
-#    
-#    component_type, selected_nodes = ask_llm_for_component_choice(current_design, detection_feedback, available_nodes)
-#    print(f"LLM selected: {component_type} with nodes {selected_nodes}")
-#    
-#    return component_type, selected_nodes
 
 accepted_modifications = [] 
 
 
 def extract_candidate_lines(filename="candidate_design.txt"):
-    """
-    Reads a SPICE netlist file and extracts only component lines.
-    Ignores comments, directives, and stops processing after '.end'.
-    """
+   
     component_lines = []
     
     try:
@@ -187,10 +172,7 @@ def extract_candidate_lines(filename="candidate_design.txt"):
         return []
 
 def extract_original_netlist_lines(netlist):
-    """
-    Reads a SPICE netlist file, extracts lines starting from '*SPICE Netlist' to '.END',
-    and updates the same file with the cleaned netlist.
-    """
+    
     component_lines = []
     capture = False  # Flag to start capturing lines
 
@@ -228,21 +210,14 @@ def extract_original_netlist_lines(netlist):
 
 
 def generate_prompt(current_design, detection_reward, available_nodes, response):
-    """
-    Create an LLM prompt that instructs the agent to insert a new component into the netlist based on detection reward and feedback from tool. 
-    The prompt includes:
-      - The current netlist.
-      - The type of component to insert and the nodes where it should be added.
-      - The SPICE syntax to follow.
-      - Use the 'FeedbackTool' to determine the best way to modify the circuit.
-    """
+   
     component_type, selected_nodes, total_tokens1 = ask_llm_for_component_choice(current_design, detection_reward, available_nodes,response)
     print(f"Selected component: {component_type} with nodes {selected_nodes}")
     if component_type == "Resistor":
         prompt = f"""I have the following SPICE netlist for an analog circuit:
---------------------------------
+
 {current_design}
---------------------------------
+
 Please insert a new resistor R<x> (replace x with a random number between 70 and 80) using the following format:
 Rx <node1> <node2> 1k
 Insert the resistor between nodes {selected_nodes[0]} and {selected_nodes[1]}.
@@ -293,10 +268,6 @@ os.environ["OPENAI_API_KEY"] = ""
 openai.api_key = os.getenv("OPENAI_API_KEY")   
 
 def call_llm_agent(prompt):
-    """
-    Use LlamaIndex's ReActAgent to generate a modified netlist.
-    This integrates a reasoning-action loop, enhancing the decision process.
-    """
    
     llm = LlamaOpenAI(api_key=os.environ.get("OPENAI_API_KEY"), model="gpt-4", temperature=0.3, max_tokens=1500)
     
@@ -398,10 +369,7 @@ def run_detection(candidate_design):
     return detection_reward, response
 
 def compute_reward(detection_reward):
-    """
-    Compute the reward based on the detection result.
-    Here, we use a binary reward: 1 if the Trojan is not detected; 0 otherwise.
-    """
+   
     if detection_reward > 0.5:
         return 1
     else:
