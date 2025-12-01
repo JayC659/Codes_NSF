@@ -2,7 +2,7 @@ import os
 
 # Conversation class
 # allows us to abstract away the details of the conversation for use with different LLM APIs
-class Conversation:
+class ChatLog:
     def __init__(self, log_file=None):
         self.messages = []
         self.log_file = log_file
@@ -22,26 +22,11 @@ class Conversation:
         """Retrieve the entire conversation."""
         return self.messages
 
-    def get_last_n_messages(self, n):
-        """Retrieve the last n messages from the conversation."""
-        return self.messages[-n:]
-
     def remove_message(self, index):
         """Remove a specific message from the conversation by index."""
         if index < len(self.messages):
             del self.messages[index]
 
-    def get_message(self, index):
-        """Retrieve a specific message from the conversation by index."""
-        return self.messages[index] if index < len(self.messages) else None
-
-    def clear_messages(self):
-        """Clear all messages from the conversation."""
-        self.messages = []
-
-    def __str__(self):
-        """Return the conversation in a string format."""
-        return "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.messages])
 os.environ["OPENAI_API_KEY"] = ""
 import openai
 from abc import ABC, abstractmethod
@@ -49,25 +34,25 @@ from abc import ABC, abstractmethod
 #from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 import torch
 
-class AbstractLLM(ABC):
+class BaseLLM(ABC):
     """Abstract Large Language Model."""
 
     def __init__(self):
         pass
 
     @abstractmethod
-    def generate(self, conversation: Conversation):
+    def generate(self, conversation: ChatLog):
         """Generate a response based on the given conversation."""
         pass
 
-class ChatGPT3p5(AbstractLLM):
+class OpenAIChatLLM(BaseLLM):
     """ChatGPT Large Language Model."""
 
     def __init__(self):
         super().__init__()
         openai.api_key=os.environ['OPENAI_API_KEY']
 
-    def generate(self, conversation: Conversation):
+    def generate(self, conversation: ChatLog):
         messages = [{'role' : msg['role'], 'content' : msg['content']} for msg in conversation.get_messages()]
 
         response = openai.chat.completions.create(
@@ -77,31 +62,17 @@ class ChatGPT3p5(AbstractLLM):
 
         return response.choices[0].message.content
 
-import sys
+import re
+import subprocess
+import time
 
-# Allows us to log the output of the model to a file if logging is enabled
-class LogStdoutToFile:
-    def __init__(self, filename):
-        self._filename = filename
-        self._original_stdout = sys.stdout
-
-    def __enter__(self):
-        if self._filename:
-            sys.stdout = open(self._filename, 'w')
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if self._filename:
-            sys.stdout.close()
-        sys.stdout = self._original_stdout
-
-def generate_verilog(conv, model_type, model_id=""):
+def run_llm_generation(conv, model_type, model_id=""):
     if model_type == "ChatGPT4":
         model = ChatGPT4()
     elif model_type == "Claude":
         model = Claude()
     elif model_type == "ChatGPT3p5":
-        model = ChatGPT3p5()
+        model = OpenAIChatLLM()
     elif model_type == "PaLM":
         model = PaLM()
     elif model_type == "CodeLLama":
@@ -109,7 +80,7 @@ def generate_verilog(conv, model_type, model_id=""):
 
     return(model.generate(conv))
 
-conv = Conversation(log_file=None)
+conv = ChatLog(log_file=None)
 
 conv.add_message("system", "You are an advanced language model trained to analyze SPICE netlists and identify anomalies that could indicate the presence of hardware Trojans. You will be provided with simulation logs of MOSFET behavior and desired specifications of the output node voltage behavior. You will check if there are normal behavior patterns of MOSFETs in the simulation log and use this knowledge to check if there is a Trojan circuit in the netlist. Using the obtained knowledge, determine the nodes where the Trojan is inserted in the netlist.")
 
@@ -423,20 +394,16 @@ conv.add_message("user", paragraph_example_1)
 conv.add_message("assistant", paragraph_example_explanation_1)
 
 
-import os
-import re
-import subprocess
-
-def spice_netlist(file_path):
+def read_spice_netlist(file_path):
   with open(file_path, 'r') as file:
     return file.read()
-def load_simulation_log(file_path):
+def read_simulation_log(file_path):
     with open(file_path, 'r') as file:
         return file.read()
-def submit_simulation_data(netlist_path, current_log_path, voltage_log_path):
-    netlist = spice_netlist(netlist_path)
-    current_log = load_simulation_log(current_log_path)
-    voltage_log = load_simulation_log(voltage_log_path)
+def run_simulation_case(netlist_path, current_log_path, voltage_log_path):
+    netlist = read_spice_netlist(netlist_path)
+    current_log = read_simulation_log(current_log_path)
+    voltage_log = read_simulation_log(voltage_log_path)
 
 
     new_task= f"""
@@ -468,7 +435,7 @@ def submit_simulation_data(netlist_path, current_log_path, voltage_log_path):
 
 
     conv.add_message("user", new_task)
-    response = generate_verilog(conv, "ChatGPT3p5")
+    response = run_llm_generation(conv, "ChatGPT3p5")
     conv.add_message("assistant", response)
 
 
@@ -477,9 +444,9 @@ def submit_simulation_data(netlist_path, current_log_path, voltage_log_path):
 
 #rerun SPICE 
 
-def rerun_spiced(updated_netlist_file, hspice_log_file):
-    netlist = spice_netlist(updated_netlist_file)
-    voltage_log = load_simulation_log(hspice_log_file)
+def rerun_spice_analysis(updated_netlist_file, hspice_log_file):
+    netlist = read_spice_netlist(updated_netlist_file)
+    voltage_log = read_simulation_log(hspice_log_file)
 
 
     new_task= f"""
@@ -509,16 +476,16 @@ def rerun_spiced(updated_netlist_file, hspice_log_file):
 
 
     conv.add_message("user", new_task)
-    response = generate_verilog(conv, "ChatGPT3p5")
+    response = run_llm_generation(conv, "ChatGPT3p5")
     conv.add_message("assistant", response)
 
 
     return response    
     
-def llm_check(updated_netlist_file, hspice_log_file):
-    netlist = spice_netlist(updated_netlist_file)
+def decide_llm_action(updated_netlist_file, hspice_log_file):
+    netlist = read_spice_netlist(updated_netlist_file)
     
-    voltage_log = load_simulation_log(hspice_log_file)
+    voltage_log = read_simulation_log(hspice_log_file)
 
 
     new_task= f"""
@@ -542,7 +509,7 @@ def llm_check(updated_netlist_file, hspice_log_file):
     conv.add_message("user", new_task)
 
 # Generate the response
-    response = generate_verilog(conv, "ChatGPT3p5")
+    response = run_llm_generation(conv, "ChatGPT3p5")
     conv.add_message("assistant", response)
 
 
@@ -555,7 +522,7 @@ output_file_path = '/home/jchaudh3/LLM_Trojan_det/transistor_lines.txt'
 updated_spice='/home/jchaudh3/LLM_Trojan_det/updated_netlist.sp'
 log_file='/home/jchaudh3/LLM_Trojan_det/updated_netlist.lis'
 
-def save_llm_response(response, llm_response):
+def write_llm_response(response, llm_response):
     if response is None:
         raise ValueError("Response is None, nothing to save.")
     llm_response = "/home/jchaudh3/LLM_Trojan_det/llm_response.txt"
@@ -568,7 +535,7 @@ def save_llm_response(response, llm_response):
         
         
         
-def extract_transistor_lines(file_path):
+def parse_transistor_lines(file_path):
     with open(file_path, 'r') as file:
         text = file.read()
 
@@ -586,37 +553,19 @@ def extract_transistor_lines(file_path):
         for line in transistor_lines:
             output_file.write(line + '\n')
 
-def remove_specific_line_from_netlist(netlist_lines, line_to_remove):
+def remove_exact_line_from_netlist(netlist_lines, line_to_remove):
     """
     Remove a specific line from the netlist lines.
     """
     updated_netlist_lines = [line for line in netlist_lines if line.strip() != line_to_remove.strip()]
     return updated_netlist_lines 
 
-def remove_line_netlist(netlist_path, output_file_path, updated_spice):
-    with open(output_file_path, 'r') as f_remove:
-        lines_to_remove = set(line.strip() for line in f_remove.readlines())
-        
-    with open(netlist_path, 'r') as f_netlist:
-        netlist_lines = f_netlist.readlines()
-
-    
-    print("Lines to remove:", lines_to_remove)
-    
-    # Ensure all lines are checked properly
-    updated_netlist = [line for line in netlist_lines if line.strip() not in lines_to_remove]
-
-    with open(updated_spice, 'w') as f_updated:
-        f_updated.writelines(updated_netlist)
-
-    print("Updated netlist has been written")    
-
-def run_hspice(updated_spice, log_file):
+def execute_hspice(updated_spice, log_file):
     result = subprocess.run(['hspice', '-i', updated_spice, '-o', log_file],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     print("HSPICE simulation completed.")    
 
-def get_case_files(files, case_id):
+def find_case_files(files, case_id):
     netlist_path = None
     current_log_path = None
     voltage_log_path = None
@@ -629,7 +578,7 @@ def get_case_files(files, case_id):
             voltage_log_path = os.path.join(cases_dir, file)
     return netlist_path, current_log_path, voltage_log_path
 
-def remove_lines_one_by_one_and_run_hspice(netlist_path, output_file_path):
+def prune_lines_and_run_hspice(netlist_path, output_file_path):
     
     with open(output_file_path, 'r') as f_remove:
         lines_to_remove = [line.strip() for line in f_remove.readlines()]
@@ -643,7 +592,7 @@ def remove_lines_one_by_one_and_run_hspice(netlist_path, output_file_path):
     for idx, line_to_remove in enumerate(lines_to_remove):
         print(f"Removing line: {line_to_remove}")
 
-        updated_netlist_lines = remove_specific_line_from_netlist(netlist_lines, line_to_remove)
+        updated_netlist_lines = remove_exact_line_from_netlist(netlist_lines, line_to_remove)
         
         # Debug: Print updated netlist after removal
         print(f"Updated netlist after removing '{line_to_remove}':")
@@ -659,8 +608,8 @@ def remove_lines_one_by_one_and_run_hspice(netlist_path, output_file_path):
         hspice_log_file = f"output_{idx}.lis"
 
         # Run HSPICE on the updated netlist
-        run_hspice(updated_netlist_file, hspice_log_file)
-        response1 = llm_check(updated_netlist_file, hspice_log_file)
+        execute_hspice(updated_netlist_file, hspice_log_file)
+        response1 = decide_llm_action(updated_netlist_file, hspice_log_file)
         print("LLM decision:", response1)
 
         if response1 == "Undo":
@@ -674,8 +623,6 @@ def remove_lines_one_by_one_and_run_hspice(netlist_path, output_file_path):
         if response1 =="Continue":
             netlist_lines = updated_netlist_lines    
     return updated_netlist_file, hspice_log_file, flag   
-   
-import time
 
 
 response_start_time = time.time()
@@ -684,17 +631,17 @@ response_start_time = time.time()
 # Main execution loop
 flag = 0
 for case_id in range(4, 5):
-    netlist_path, current_log_path, voltage_log_path = get_case_files(all_files, case_id)
+    netlist_path, current_log_path, voltage_log_path = find_case_files(all_files, case_id)
 
     if netlist_path and current_log_path and voltage_log_path:
         print("Pass")
-        response = submit_simulation_data(netlist_path, current_log_path, voltage_log_path)
+        response = run_simulation_case(netlist_path, current_log_path, voltage_log_path)
         print(f"Response for case {case_id}:")
         print(response)
-        save_llm_response(response, "/home/jchaudh3/LLM_Trojan_det/llm_response.txt")
-        extract_transistor_lines("/home/jchaudh3/LLM_Trojan_det/llm_response.txt")
+        write_llm_response(response, "/home/jchaudh3/LLM_Trojan_det/llm_response.txt")
+        parse_transistor_lines("/home/jchaudh3/LLM_Trojan_det/llm_response.txt")
         
-        updated_netlist_file, hspice_log_file, flag = remove_lines_one_by_one_and_run_hspice(netlist_path, output_file_path)
+        updated_netlist_file, hspice_log_file, flag = prune_lines_and_run_hspice(netlist_path, output_file_path)
         
         for i in range(1, 5):
             if flag == 1:
@@ -702,14 +649,14 @@ for case_id in range(4, 5):
 #            with open(output_file_path, 'w') as f:
 #                f.write("")
             # Call rerun_spiced with the last updated netlist and log file
-            response = rerun_spiced(updated_netlist_file, hspice_log_file)
+            response = rerun_spice_analysis(updated_netlist_file, hspice_log_file)
             print(f"Iteration {i}, response: {response}")
 
-            save_llm_response(response, "/home/jchaudh3/LLM_Trojan_det/llm_response.txt")
-            extract_transistor_lines("/home/jchaudh3/LLM_Trojan_det/llm_response.txt")
+            write_llm_response(response, "/home/jchaudh3/LLM_Trojan_det/llm_response.txt")
+            parse_transistor_lines("/home/jchaudh3/LLM_Trojan_det/llm_response.txt")
             
             # Run line removal and HSPICE again with the updated netlist
-            updated_netlist_file, hspice_log_file, flag = remove_lines_one_by_one_and_run_hspice(updated_netlist_file, output_file_path)
+            updated_netlist_file, hspice_log_file, flag = prune_lines_and_run_hspice(updated_netlist_file, output_file_path)
 
         print("\n" + "="*50 + "\n")
     else:
