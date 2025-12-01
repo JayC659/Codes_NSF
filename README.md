@@ -15,8 +15,8 @@ Packages (minimal set):
   ```bash
   pip install openai 
   ```
-**Include HSPICE in your PATH**
-**Create an OPENAI_API_KEY  if using the OpenAI backend**
+Include HSPICE in your PATH**
+Create an OPENAI_API_KEY  if using the OpenAI backend**
 
 
 
