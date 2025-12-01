@@ -1,7 +1,6 @@
 import os
 
-# Conversation class
-# allows us to abstract away the details of the conversation for use with different LLM APIs
+
 class Conversation:
     def __init__(self, log_file=None):
         self.messages = []
