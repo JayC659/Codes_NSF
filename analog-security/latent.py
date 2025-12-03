@@ -8,19 +8,12 @@ import shutil
 from typing import Type
 import tiktoken
 import time
-
-# Define the function to calculate token count
-
-
-
 from pydantic import BaseModel
 from llama_index.core.agent import ReActAgent
 from llama_index.llms.openai import OpenAI as LlamaOpenAI
 from llama_index.core.tools import BaseTool, FunctionTool
 # from llama_index.core import PromptTemplate  # if needed
 from spiced_plus import *
-
-# Set your OpenAI API key (or ensure the environment variable is set)
 openai.api_key = os.environ.get("OPENAI_API_KEY", "YOUR_API_KEY_HERE")
 
 
@@ -86,11 +79,8 @@ Thought: reasoning behind choosing the component
         return "Resistor", random.sample(available_nodes, 2)
   
 def calculate_token_count(model, *messages):
-    # Initialize the tokenizer for the model
     tokenizer = tiktoken.encoding_for_model(model)
     total_tokens = 0
-
-    # Calculate tokens for each message
     for message in messages:
         total_tokens += len(tokenizer.encode(message))
     return total_tokens
@@ -115,14 +105,14 @@ def load_netlist(filename):
 
 def save_netlist(netlist, filename):
     """Save the SPICE netlist to a file."""
-    if hasattr(netlist, "response"):  # Check if candidate_design is an object with a response attribute
+    if hasattr(netlist, "response"):  # Check if candidate_design has the response attribute
         netlist = netlist.response
     with open(filename, 'w') as file:
         file.write(netlist)
 
 def extract_nodes(netlist):
    
-    if hasattr(netlist, "response"):  # Check if candidate_design is an object with a response attribute
+    if hasattr(netlist, "response"):  
         netlist = netlist.response
     nodes = set()
     lines = netlist.splitlines()
@@ -148,16 +138,15 @@ def extract_candidate_lines(filename="candidate_design.txt"):
     
     try:
         with open(filename, "r") as file:
-            lines = file.readlines()  # Read file content
+            lines = file.readlines() 
 
         for line in lines:
             line = line.strip()
             if not line:
                 continue
-            # Stop processing after '.end'
+            
             if line.lower().startswith(".end"):
                 break
-            # Ignore comments and directives
             if line.startswith("*") or (line.startswith(".") and not line.lower().startswith(".end")):
                 continue
             component_lines.append(line)
@@ -178,21 +167,20 @@ def extract_original_netlist_lines(netlist):
 
     try:
         with open(netlist, "r") as file:
-            lines = file.readlines()  # Read file content
+            lines = file.readlines()  
 
         for line in lines:
             line = line.strip()
             if not line:
                 continue
 
-            # Start capturing from '*SPICE Netlist'
+        
             if line.startswith("*SPICE Netlist"):
                 capture = True
 
             if capture:
                 component_lines.append(line)
 
-                # Stop capturing after '.END'
                 if line.lower().startswith(".end"):
                     break
 
@@ -263,7 +251,7 @@ Output only the modified netlist."""
     print("agent input token", total_tokens2+total_tokens1)
     return prompt
 
-# Ensure the API key is set for OpenAI (can also be set via environment variables)
+# Ensure the API key is set 
 os.environ["OPENAI_API_KEY"] = ""
 openai.api_key = os.getenv("OPENAI_API_KEY")   
 
@@ -428,12 +416,11 @@ def main():
         
 
         # Decide whether to accept the modification.
-        if detection_result == 1:  # Reward threshold: modification undetected.
+        if detection_result == 1:  # Reward equals 1: modification undetected.
             current_design = candidate_design  # Accept modification.
             accepted_count += 1
             print("Modification accepted.")
             print("current design after mod:", current_design)
-            # Update available nodes in case the netlist changed.
             available_nodes = extract_nodes(current_design)
         else:
             print("Modification rejected. Retaining previous design.")
