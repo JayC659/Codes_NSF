@@ -547,8 +547,7 @@ def parse_transistor_lines(file_path):
     
     transistor_lines = [line.replace('`', '').strip() for line in transistor_lines]
     
-    # Output file should be specified here
-    output_file_path = '/home/jchaudh3/LLM_Trojan_det/transistor_lines.txt'  # Adjust as needed
+    output_file_path = '/home/jchaudh3/LLM_Trojan_det/transistor_lines.txt'  
     with open(output_file_path, 'w') as output_file:
         for line in transistor_lines:
             output_file.write(line + '\n')
@@ -594,7 +593,6 @@ def prune_lines_and_run_hspice(netlist_path, output_file_path):
 
         updated_netlist_lines = remove_exact_line_from_netlist(netlist_lines, line_to_remove)
         
-        # Debug: Print updated netlist after removal
         print(f"Updated netlist after removing '{line_to_remove}':")
         for line in updated_netlist_lines:
             print(line.strip())
